@@ -43,6 +43,14 @@ def load_data(dataset):
                                                    data = (('weight', int),),
                                                    delimiter = ' '))
         features = sp.identity(adj.shape[0])
+    
+    elif dataset == 'IBM':
+        print("Loading IBM AML dataset")
+        adj = nx.adjacency_matrix(nx.read_edgelist("../data/IBM_AML/transaction_graph.edgelist",
+                                                   nodetype = int,
+                                                   data = (('weight', int),),
+                                                   delimiter = ' '))
+        features = sp.identity(adj.shape[0])
 
     elif dataset in ('cora', 'citeseer', 'pubmed'):
         # Load the data: x, tx, allx, graph
