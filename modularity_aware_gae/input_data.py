@@ -102,7 +102,7 @@ def load_labels(dataset):
     
     elif dataset == 'IBM':
         print("Loading IBM AML dataset - 456")
-        labels = np.loadtxt("../data/IBM_AML/IBM_labels.csv", delimiter = ' ', dtype = str)
+        labels = np.loadtxt("../data/IBM_AML/IBM-labels.csv", delimiter = ' ', dtype = str)
 
     elif dataset in ('cora', 'citeseer', 'pubmed'):
         names = ['ty', 'ally']
