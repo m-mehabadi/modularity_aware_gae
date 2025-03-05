@@ -45,9 +45,9 @@ def load_data(dataset):
         features = sp.identity(adj.shape[0])
     
     elif dataset == 'IBM':
-        print("Loading IBM AML dataset")
-        adj = nx.adjacency_matrix(nx.read_edgelist("../data/IBM_AML/transaction_graph.edgelist",
-                                                   nodetype = int,
+        print("Loading IBM AML dataset - 123")
+        adj = nx.adjacency_matrix(nx.read_edgelist("../data/IBM_AML/IBM-graph.edgelist",
+                                                   nodetype = str,
                                                    data = (('weight', int),),
                                                    delimiter = ' '))
         features = sp.identity(adj.shape[0])
@@ -99,6 +99,10 @@ def load_labels(dataset):
 
     elif dataset == 'blogs':
         labels = np.loadtxt("../data/blogs-cluster", delimiter = ' ', dtype = str)
+    
+    elif dataset == 'IBM':
+        print("Loading IBM AML dataset - 456")
+        labels = np.loadtxt("../data/IBM_AML/IBM_labels.csv", delimiter = ' ', dtype = str)
 
     elif dataset in ('cora', 'citeseer', 'pubmed'):
         names = ['ty', 'ally']
