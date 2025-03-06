@@ -21,24 +21,37 @@ def parse_index_file(filename):
     return index
 
 
-def load_data(dataset):
-
+def load_data(dataset, dataset_path=None):
     """
     Load datasets
-    :param dataset: name of the input graph dataset
+    :param dataset: name of the input graph dataset (optional)
+    :param dataset_path: path to graph data file (required if dataset is None)
     :return: n*n sparse adjacency matrix and n*f node features matrix
     """
+    if dataset is None:
+        if dataset_path is None:
+            raise ValueError('Error: dataset_path must be provided when dataset is None')
+        # Load custom dataset
+        adj = nx.adjacency_matrix(nx.read_edgelist(dataset_path,
+                                                   nodetype = str,
+                                                   data = (('weight', int),),
+                                                   delimiter = ' '))
+        features = sp.identity(adj.shape[0])
+        return adj, features
+
+    # Use default path for predefined datasets
+    base_path = "../data"
 
     if dataset == 'cora-large':
-        adj = nx.adjacency_matrix(nx.read_edgelist("../data/coralarge", delimiter = ' '))
+        adj = nx.adjacency_matrix(nx.read_edgelist(f"{base_path}/coralarge", delimiter = ' '))
         features = sp.identity(adj.shape[0])
 
     elif dataset == 'sbm':
-        adj = nx.adjacency_matrix(nx.read_edgelist("../data/sbm.txt"))
+        adj = nx.adjacency_matrix(nx.read_edgelist(f"{base_path}/sbm.txt"))
         features = sp.identity(adj.shape[0])
 
     elif dataset == 'blogs':
-        adj = nx.adjacency_matrix(nx.read_edgelist("../data/blogs",
+        adj = nx.adjacency_matrix(nx.read_edgelist(f"{base_path}/blogs",
                                                    nodetype = int,
                                                    data = (('weight', int),),
                                                    delimiter = ' '))
@@ -46,7 +59,7 @@ def load_data(dataset):
     
     elif dataset == 'IBM':
         print("Loading IBM AML dataset - 123")
-        adj = nx.adjacency_matrix(nx.read_edgelist("../data/IBM_AML/IBM-graph.edgelist",
+        adj = nx.adjacency_matrix(nx.read_edgelist(f"{base_path}/IBM_AML/IBM-graph.edgelist",
                                                    nodetype = str,
                                                    data = (('weight', int),),
                                                    delimiter = ' '))
@@ -57,13 +70,13 @@ def load_data(dataset):
         names = ['x', 'tx', 'allx', 'graph']
         objects = []
         for i in range(len(names)):
-            with open("../data/ind.{}.{}".format(dataset, names[i]), 'rb') as f:
+            with open(f"{base_path}/ind.{dataset}.{names[i]}", 'rb') as f:
                 if sys.version_info > (3, 0):
                     objects.append(pkl.load(f, encoding = 'latin1'))
                 else:
                     objects.append(pkl.load(f))
         x, tx, allx, graph = tuple(objects)
-        test_idx_reorder = parse_index_file("../data/ind.{}.test.index".format(dataset))
+        test_idx_reorder = parse_index_file(f"{base_path}/ind.{dataset}.test.index")
         test_idx_range = np.sort(test_idx_reorder)
         if dataset == 'citeseer':
             # Fix citeseer dataset (there are some isolated nodes in the graph)
@@ -83,38 +96,47 @@ def load_data(dataset):
     return adj, features
 
 
-def load_labels(dataset):
-
+def load_labels(dataset, labelset_path=None):
     """
     Load node-level labels
-    :param dataset: name of the input graph dataset
+    :param dataset: name of the input graph dataset (optional)
+    :param labelset_path: path to labels file (required if dataset is None)
     :return: n-dim array of node labels, used for community detection
     """
+    if dataset is None:
+        if labelset_path is None:
+            raise ValueError('Error: labelset_path must be provided when dataset is None')
+        # Load custom labels
+        labels = np.loadtxt(labelset_path, delimiter = ' ', dtype = str)
+        return labels
+
+    # Use default path for predefined datasets
+    base_path = "../data"
 
     if dataset == 'cora-large':
-        labels = np.loadtxt("../data/coralarge-cluster", delimiter = ' ', dtype = str)
+        labels = np.loadtxt(f"{base_path}/coralarge-cluster", delimiter = ' ', dtype = str)
 
     elif dataset == 'sbm':
         labels = np.repeat(range(100), 1000)
 
     elif dataset == 'blogs':
-        labels = np.loadtxt("../data/blogs-cluster", delimiter = ' ', dtype = str)
+        labels = np.loadtxt(f"{base_path}/blogs-cluster", delimiter = ' ', dtype = str)
     
     elif dataset == 'IBM':
         print("Loading IBM AML dataset - 456")
-        labels = np.loadtxt("../data/IBM_AML/IBM-labels.csv", delimiter = ' ', dtype = str)
+        labels = np.loadtxt(f"{base_path}/IBM_AML/IBM-labels.csv", delimiter = ' ', dtype = str)
 
     elif dataset in ('cora', 'citeseer', 'pubmed'):
         names = ['ty', 'ally']
         objects = []
         for i in range(len(names)):
-            with open("../data/ind.{}.{}".format(dataset, names[i]), 'rb') as f:
+            with open(f"{base_path}/ind.{dataset}.{names[i]}", 'rb') as f:
                 if sys.version_info > (3, 0):
                     objects.append(pkl.load(f, encoding = 'latin1'))
                 else:
                     objects.append(pkl.load(f))
         ty, ally = tuple(objects)
-        test_idx_reorder = parse_index_file("../data/ind.{}.test.index".format(dataset))
+        test_idx_reorder = parse_index_file(f"{base_path}/ind.{dataset}.test.index")
         test_idx_range = np.sort(test_idx_reorder)
         if dataset == 'citeseer':
             # Fix citeseer dataset (there are some isolated nodes in the graph)

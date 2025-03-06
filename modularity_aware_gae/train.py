@@ -21,8 +21,11 @@ FLAGS = flags.FLAGS
 
 
 # Parameters related to the input data
-flags.DEFINE_string('dataset', 'cora', 'Graph dataset, among: cora, citeseer, \
-                                        pubmed, blogs, cora-large, sbm')
+flags.DEFINE_string('dataset', None, 'Graph dataset, among: cora, citeseer, \
+                                        pubmed, blogs, cora-large, sbm. If not provided, \
+                                        dataset_path and labelset_path must be provided')
+flags.DEFINE_string('dataset_path', None, 'Path to graph data file. Required if dataset is not provided')
+flags.DEFINE_string('labelset_path', None, 'Path to labels file. Required if dataset is not provided')
 flags.DEFINE_boolean('features', False, 'Whether to include node features')
 
 
@@ -89,12 +92,24 @@ if FLAGS.task not in ('task_1', 'task_2'):
     raise ValueError('Error: undefined task!')
 
 
+# Validate input parameters
+if FLAGS.dataset is None:
+    if FLAGS.dataset_path is None or FLAGS.labelset_path is None:
+        raise ValueError('Error: If dataset is not provided, both dataset_path and labelset_path must be provided!')
+    if FLAGS.verbose:
+        print("Using custom dataset from:", FLAGS.dataset_path)
+        print("Using custom labels from:", FLAGS.labelset_path)
+
+
 # Load data
 if FLAGS.verbose:
     print("LOADING DATA\n")
-    print("Loading the", FLAGS.dataset, "graph")
-adj_init, features_init = load_data(FLAGS.dataset)
-labels = load_labels(FLAGS.dataset)
+    if FLAGS.dataset:
+        print("Loading the", FLAGS.dataset, "graph")
+    else:
+        print("Loading custom dataset")
+adj_init, features_init = load_data(FLAGS.dataset, FLAGS.dataset_path)
+labels = load_labels(FLAGS.dataset, FLAGS.labelset_path)
 if FLAGS.verbose:
     print("- Number of nodes:", adj_init.shape[0])
     print("- Number of communities:", len(np.unique(labels)))
