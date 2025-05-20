@@ -54,111 +54,74 @@ def construct_feed_dict(adj_normalized, adj_normalized_layer2, adj_orig, feature
     return feed_dict
 
 
-def mask_test_edges(adj, test_percent = 10., val_percent = 5.):
+def mask_test_edges(adj, test_percent, val_percent):
+    """ Randomly removes some edges from original graph for validation/test sets
 
-    """
-    Randomly removes some edges from original graph to create
-    test and validation sets for the link prediction task
-    :param adj: complete sparse adjacency matrix of the graph
-    :param test_percent: percentage of edges in test set
-    :param val_percent: percentage of edges in validation set
-    :return: train incomplete adjacency matrix, validation and test sets
+    :param adj: scipy.sparse.csr_matrix
+        Original adjacency matrix
+    :param test_percent: float
+        Percentage of edges in test set
+    :param val_percent: float
+        Percentage of edges in validation set
+    :return: tuple containing:
+        - train adjacency matrix
+        - validation edges
+        - validation edges (negative)
+        - test edges
+        - test edges (negative)
     """
 
     # Remove diagonal elements
-    adj = adj - sp.dia_matrix((adj.diagonal()[None, :], [0]), shape = adj.shape)
+    adj = adj - sp.dia_matrix((adj.diagonal()[np.newaxis, :], [0]), shape=adj.shape)
     adj.eliminate_zeros()
 
-    edges_positive, _, _ = sparse_to_tuple(adj)
-    # Filtering out edges from lower triangle of adjacency matrix
-    edges_positive = edges_positive[edges_positive[:, 1] > edges_positive[:, 0], :]
+    # Check that diag is zero:
+    assert np.diag(adj.todense()).sum() == 0
 
-    # Number of positive (and negative) edges in test and val sets:
-    num_test = int(np.floor(edges_positive.shape[0] / (100. / test_percent)))
-    num_val = int(np.floor(edges_positive.shape[0] / (100. / val_percent)))
+    # Convert to COO format for easier edge manipulation
+    adj = adj.tocoo()
+    edges = np.vstack((adj.row, adj.col)).T
+    num_test = int(np.floor(edges.shape[0] * test_percent / 100.))
+    num_val = int(np.floor(edges.shape[0] * val_percent / 100.))
 
-    # Sample positive edges for test and val sets:
-    edges_positive_idx = np.arange(edges_positive.shape[0])
-    np.random.shuffle(edges_positive_idx)
-    val_edge_idx = edges_positive_idx[:num_val]
-    test_edge_idx = edges_positive_idx[num_val:(num_val + num_test)]
-    test_edges = edges_positive[test_edge_idx] # positive test edges
-    val_edges = edges_positive[val_edge_idx] # positive val edges
-    train_edges = np.delete(edges_positive, np.hstack([test_edge_idx, val_edge_idx]), axis = 0) # positive train edges
+    # Store edges in list and remove symmetric edges
+    edge_tuples = list(map(tuple, edges))
+    edges_all = edge_tuples + [(j, i) for (i, j) in edge_tuples]
+    edges_all = list(set(edges_all))
+    np.random.shuffle(edges_all)
 
-    # The above strategy for sampling without replacement will not work for
-    # sampling negative edges on large graphs, because the pool of negative
-    # edges is much much larger due to sparsity, therefore we'll use
-    # the following strategy:
-    # 1. sample random linear indices from adjacency matrix WITH REPLACEMENT
-    # (without replacement is super slow). sample more than we need so we'll
-    # probably have enough after all the filtering steps.
-    # 2. remove any edges that have already been added to the other edge lists
-    # 3. convert to (i,j) coordinates
-    # 4. swap i and j where i > j, to ensure they're upper triangle elements
-    # 5. remove any duplicate elements if there are any
-    # 6. remove any diagonal elements
-    # 7. if we don't have enough edges, repeat this process until we get enough
-    positive_idx, _, _ = sparse_to_tuple(adj) # [i,j] coord pairs for all true edges
-    positive_idx = positive_idx[:, 0]*adj.shape[0] + positive_idx[:, 1] # linear indices
-    test_edges_false = np.empty((0,2), dtype = 'int64')
-    idx_test_edges_false = np.empty((0,), dtype = 'int64')
-
-    while len(test_edges_false) < len(test_edges):
-        # step 1:
-        idx = np.random.choice(adj.shape[0]**2, 2*(num_test - len(test_edges_false)), replace = True)
-        # step 2:
-        idx = idx[~np.in1d(idx, positive_idx, assume_unique = True)]
-        idx = idx[~np.in1d(idx, idx_test_edges_false, assume_unique = True)]
-        # step 3:
-        rowidx = idx // adj.shape[0]
-        colidx = idx % adj.shape[0]
-        coords = np.vstack((rowidx, colidx)).transpose()
-        # step 4:
-        lowertrimask = coords[:, 0] > coords[:, 1]
-        coords[lowertrimask] = coords[lowertrimask][:, ::-1]
-        # step 5:
-        coords = np.unique(coords, axis = 0) # note: coords are now sorted lexicographically
-        np.random.shuffle(coords) # not anymore
-        # step 6:
-        coords = coords[coords[:,0] != coords[:,1]]
-        # step 7:
-        coords = coords[:min(num_test, len(idx))]
-        test_edges_false = np.append(test_edges_false, coords, axis = 0)
-        idx = idx[:min(num_test, len(idx))]
-        idx_test_edges_false = np.append(idx_test_edges_false, idx)
-
-    val_edges_false = np.empty((0,2), dtype = 'int64')
-    idx_val_edges_false = np.empty((0,), dtype = 'int64')
-    while len(val_edges_false) < len(val_edges):
-        # step 1:
-        idx = np.random.choice(adj.shape[0]**2, 2*(num_val - len(val_edges_false)), replace = True)
-        # step 2:
-        idx = idx[~np.in1d(idx, positive_idx, assume_unique = True)]
-        idx = idx[~np.in1d(idx, idx_test_edges_false, assume_unique = True)]
-        idx = idx[~np.in1d(idx, idx_val_edges_false, assume_unique = True)]
-        # step 3:
-        rowidx = idx // adj.shape[0]
-        colidx = idx % adj.shape[0]
-        coords = np.vstack((rowidx,colidx)).transpose()
-        # step 4:
-        lowertrimask = coords[:, 0] > coords[:, 1]
-        coords[lowertrimask] = coords[lowertrimask][:, ::-1]
-        # step 5:
-        coords = np.unique(coords, axis = 0) # note: coords are now sorted lexicographically
-        np.random.shuffle(coords) # not any more
-        # step 6:
-        coords = coords[coords[:, 0] != coords[:, 1]]
-        # step 7:
-        coords = coords[:min(num_val, len(idx))]
-        val_edges_false = np.append(val_edges_false, coords, axis = 0)
-        idx = idx[:min(num_val, len(idx))]
-        idx_val_edges_false = np.append(idx_val_edges_false, idx)
-
-    # Re-build adj matrix
-    data = np.ones(train_edges.shape[0])
-    adj_train = sp.csr_matrix((data, (train_edges[:, 0], train_edges[:, 1])), shape = adj.shape)
+    # Split edge set for training and testing
+    test_edges = edges_all[:num_test]
+    val_edges = edges_all[num_test:num_test+num_val]
+    train_edges = edges_all[num_test+num_val:]
+    
+    # Create training adjacency matrix
+    data = np.ones(len(train_edges))
+    adj_train = sp.csr_matrix((data, zip(*train_edges)), shape=adj.shape)
     adj_train = adj_train + adj_train.T
+
+    # Create validation/test sets of negative edges (non-edges)
+    test_edges_false = []
+    val_edges_false = []
+    
+    # Function to sample negative edges
+    def sample_neg_edges(num_needed, existing_edges):
+        neg_edges = set()
+        while len(neg_edges) < num_needed:
+            i = np.random.randint(0, adj.shape[0])
+            j = np.random.randint(0, adj.shape[0])
+            if i != j and (i, j) not in existing_edges and (j, i) not in existing_edges:
+                neg_edges.add((i, j))
+        return list(neg_edges)
+
+    # Generate negative test edges
+    test_edges_false = sample_neg_edges(num_test, set(edges_all))
+    
+    # Generate negative validation edges
+    val_edges_false = sample_neg_edges(num_val, set(edges_all + test_edges_false))
+
+    assert len(test_edges_false) == num_test
+    assert len(val_edges_false) == num_val
 
     return adj_train, val_edges, val_edges_false, test_edges, test_edges_false
 
